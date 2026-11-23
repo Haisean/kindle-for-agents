@@ -29,11 +29,11 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/wangqi996/kindle-for-agents.git"
+    "url": "git+https://github.com/haisean996/kindle-for-agents.git"
   },
-  "homepage": "https://github.com/wangqi996/kindle-for-agents#readme",
+  "homepage": "https://github.com/haisean996/kindle-for-agents#readme",
   "bugs": {
-    "url": "https://github.com/wangqi996/kindle-for-agents/issues"
+    "url": "https://github.com/haisean996/kindle-for-agents/issues"
   },
   "publishConfig": {
     "access": "public"
