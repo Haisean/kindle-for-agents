@@ -38,8 +38,19 @@ export async function validateEpub(epubFilePath: string): Promise<ValidationResu
       }
     }
 
-    // 3. Check OEBPS/content.opf
-    const opfFile = zip.file('OEBPS/content.opf') || zip.file('content.opf');
+    // 3. Check OPF package file (follow container.xml rootfile, fall back to any *.opf)
+    let rootfilePath = '';
+    if (containerFile) {
+      const containerText = await containerFile.async('string');
+      const m = containerText.match(/full-path\s*=\s*["']([^"']+)["']/);
+      if (m) rootfilePath = m[1];
+    }
+    const anyOpf = Object.keys(zip.files).find(n => /\.opf$/i.test(n) && !zip.files[n].dir);
+    const opfFile =
+      (rootfilePath ? zip.file(rootfilePath) : null) ||
+      zip.file('OEBPS/content.opf') ||
+      zip.file('content.opf') ||
+      (anyOpf ? zip.file(anyOpf) : null);
     if (!opfFile) {
       issues.push({ severity: 'error', message: '缺少 OPF 包定义文件' });
     } else {
