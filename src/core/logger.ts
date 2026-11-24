@@ -23,30 +23,51 @@ export function maskSensitiveText(text: string): string {
 
 export class Logger {
   private debugMode: boolean = false;
+  private jsonMode: boolean = false;
 
-  constructor(debugMode: boolean = false) {
+  constructor(debugMode: boolean = false, jsonMode: boolean = false) {
+    this.debugMode = debugMode;
+    this.jsonMode = jsonMode;
+  }
+
+  setDebug(debugMode: boolean): void {
     this.debugMode = debugMode;
   }
 
-  setDebug(debugMode: boolean) {
-    this.debugMode = debugMode;
+  setJsonMode(jsonMode: boolean): void {
+    this.jsonMode = jsonMode;
   }
 
-  info(message: string, ...args: unknown[]) {
+  info(message: string, ...args: unknown[]): void {
+    if (this.jsonMode) {
+      return;
+    }
     console.log(maskSensitiveText(message), ...args.map(a => typeof a === 'string' ? maskSensitiveText(a) : a));
   }
 
-  warn(message: string, ...args: unknown[]) {
+  warn(message: string, ...args: unknown[]): void {
+    if (this.jsonMode) {
+      return;
+    }
     console.warn(`[WARN] ${maskSensitiveText(message)}`, ...args.map(a => typeof a === 'string' ? maskSensitiveText(a) : a));
   }
 
-  error(message: string, ...args: unknown[]) {
+  error(message: string, ...args: unknown[]): void {
+    if (this.jsonMode) {
+      return;
+    }
     console.error(`[ERROR] ${maskSensitiveText(message)}`, ...args.map(a => typeof a === 'string' ? maskSensitiveText(a) : a));
   }
 
-  debug(message: string, ...args: unknown[]) {
+  debug(message: string, ...args: unknown[]): void {
     if (this.debugMode) {
-      console.log(`[DEBUG] ${maskSensitiveText(message)}`, ...args.map(a => typeof a === 'string' ? maskSensitiveText(a) : a));
+      const formattedMessage = `[DEBUG] ${maskSensitiveText(message)}`;
+      const formattedArgs = args.map(a => typeof a === 'string' ? maskSensitiveText(a) : a);
+      if (this.jsonMode) {
+        console.error(formattedMessage, ...formattedArgs);
+      } else {
+        console.log(formattedMessage, ...formattedArgs);
+      }
     }
   }
 }

@@ -5,17 +5,18 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { clearJobs, createJob, getJob, listRecentJobs, updateJobStatus } from '../src/core/tracker';
 
 describe('Job tracker output lifecycle', () => {
-  const originalLocalAppData = process.env.LOCALAPPDATA;
-  let tempLocalAppData = '';
+  const originalStateDir = process.env.KINDLE_BRIDGE_STATE_DIR;
+  let tempStateDir = '';
 
   beforeEach(() => {
-    tempLocalAppData = fs.mkdtempSync(path.join(os.tmpdir(), 'kindle-bridge-jobs-'));
-    process.env.LOCALAPPDATA = tempLocalAppData;
+    tempStateDir = fs.mkdtempSync(path.join(os.tmpdir(), 'kindle-bridge-jobs-'));
+    process.env.KINDLE_BRIDGE_STATE_DIR = tempStateDir;
   });
 
   afterEach(() => {
-    process.env.LOCALAPPDATA = originalLocalAppData;
-    fs.rmSync(tempLocalAppData, { recursive: true, force: true });
+    if (originalStateDir === undefined) delete process.env.KINDLE_BRIDGE_STATE_DIR;
+    else process.env.KINDLE_BRIDGE_STATE_DIR = originalStateDir;
+    fs.rmSync(tempStateDir, { recursive: true, force: true });
   });
 
   it('removes a stale output path after a temporary EPUB is cleaned up', () => {

@@ -11,36 +11,42 @@ import {
 } from '../src/core/credentials';
 
 describe('Windows credential protection', () => {
-  const originalAppData = process.env.APPDATA;
-  let tempAppData = '';
+  const originalConfigDir = process.env.KINDLE_BRIDGE_CONFIG_DIR;
+  let tempConfigDir = '';
 
   beforeEach(() => {
-    tempAppData = fs.mkdtempSync(path.join(os.tmpdir(), 'kindle-bridge-credentials-'));
-    process.env.APPDATA = tempAppData;
+    tempConfigDir = fs.mkdtempSync(path.join(os.tmpdir(), 'kindle-bridge-credentials-'));
+    process.env.KINDLE_BRIDGE_CONFIG_DIR = tempConfigDir;
   });
 
   afterEach(() => {
-    clearCredentials();
-    process.env.APPDATA = originalAppData;
-    fs.rmSync(tempAppData, { recursive: true, force: true });
+    if (process.platform === 'win32') {
+      clearCredentials();
+    }
+    if (originalConfigDir === undefined) delete process.env.KINDLE_BRIDGE_CONFIG_DIR;
+    else process.env.KINDLE_BRIDGE_CONFIG_DIR = originalConfigDir;
+    fs.rmSync(tempConfigDir, { recursive: true, force: true });
   });
 
-  it('round-trips credentials without storing the authorization code in plaintext', () => {
-    const credentials = {
-      smtpHost: 'smtp.example.com',
-      smtpPort: 465,
-      smtpUser: 'reader@example.com',
-      smtpPass: 'secret-auth-code',
-      kindleEmail: 'reader@kindle.com'
-    };
+  it.runIf(process.platform === 'win32')(
+    'round-trips credentials without storing the authorization code in plaintext',
+    () => {
+      const credentials = {
+        smtpHost: 'smtp.example.com',
+        smtpPort: 465,
+        smtpUser: 'reader@example.com',
+        smtpPass: 'secret-auth-code',
+        kindleEmail: 'reader@kindle.com'
+      };
 
-    saveCredentials(credentials);
+      saveCredentials(credentials);
 
-    const stored = fs.readFileSync(getCredentialsPath(), 'utf8');
-    expect(stored).not.toContain(credentials.smtpPass);
-    expect(stored).not.toContain(credentials.smtpUser);
-    expect(loadCredentials()).toEqual(credentials);
-  });
+      const stored = fs.readFileSync(getCredentialsPath(), 'utf8');
+      expect(stored).not.toContain(credentials.smtpPass);
+      expect(stored).not.toContain(credentials.smtpUser);
+      expect(loadCredentials()).toEqual(credentials);
+    }
+  );
 
   it('rejects platforms without an implemented system credential store', () => {
     expect(() => ensureCredentialStorageSupported('linux')).toThrow(

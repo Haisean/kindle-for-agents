@@ -9,6 +9,7 @@ import { buildEpub } from '../../converter/epub-builder';
 import { validateEpub } from '../../converter/validator';
 import { EmailTransport } from '../../transport/email';
 import { logger } from '../../core/logger';
+import { getProductTempDir } from '../../core/paths';
 import { ExitCodes, KindleErrorCode, MachineOutput } from '../../types';
 import { getCapabilityStatus } from '../../core/capability';
 
@@ -22,6 +23,8 @@ export function registerSendCommand(program: Command) {
     .option('--keep-epub', '保留生成的临时 EPUB 文件', false)
     .option('--dry-run', '仅执行解析、转换与 EPUB 校验，不实际发送', false)
     .option('--timeout <seconds>', '设置发送超时时间（秒）', '60')
+    .option('--json', '以机器可读的 JSON 格式输出结果')
+    .option('--debug', '开启调试模式输出详细脱敏日志')
     .action(async (filePath: string, options: {
       title?: string;
       author?: string;
@@ -29,10 +32,14 @@ export function registerSendCommand(program: Command) {
       keepEpub?: boolean;
       dryRun?: boolean;
       timeout?: string;
-    }) => {
-      const globalOpts = program.opts();
-      const isJson = !!globalOpts.json;
-      logger.setDebug(!!globalOpts.debug);
+      json?: boolean;
+      debug?: boolean;
+    }, cmd: Command) => {
+      const globalOpts = cmd.optsWithGlobals<{ json?: boolean; debug?: boolean }>();
+      const isJson = Boolean(globalOpts.json || program.opts().json);
+      const isDebug = Boolean(globalOpts.debug || program.opts().debug);
+      logger.setJsonMode(isJson);
+      logger.setDebug(isDebug);
 
       const absoluteInputPath = path.resolve(process.cwd(), filePath);
       const job = createJob(
@@ -56,7 +63,8 @@ export function registerSendCommand(program: Command) {
           };
           updateJobStatus(job.jobId, 'failed', errOutput.error!.message, { error: errOutput.error });
           outputResult(errOutput, isJson);
-          process.exit(ExitCodes[KindleErrorCode.INVALID_PARAMS]);
+          process.exitCode = ExitCodes[KindleErrorCode.INVALID_PARAMS];
+          return;
         }
 
         const config = loadConfig();
@@ -76,7 +84,8 @@ export function registerSendCommand(program: Command) {
           };
           updateJobStatus(job.jobId, 'failed', errOutput.error!.message, { error: errOutput.error });
           outputResult(errOutput, isJson);
-          process.exit(ExitCodes[KindleErrorCode.CONFIG_MISSING]);
+          process.exitCode = ExitCodes[KindleErrorCode.CONFIG_MISSING];
+          return;
         }
 
         const author = options.author || config.defaultAuthor;
@@ -93,7 +102,10 @@ export function registerSendCommand(program: Command) {
         // 2. Generating EPUB
         let targetEpubPath = absoluteInputPath;
         if (!doc.isEpubPassthrough) {
-          const tempDir = path.join(process.cwd(), '.kindle-for-agents-temp');
+          const tempDir = getProductTempDir();
+          if (!fs.existsSync(tempDir)) {
+            fs.mkdirSync(tempDir, { recursive: true });
+          }
           const ext = path.extname(absoluteInputPath);
           const baseName = path.basename(absoluteInputPath, ext);
           targetEpubPath = path.join(tempDir, `${baseName}_${job.jobId}.epub`);
@@ -119,7 +131,8 @@ export function registerSendCommand(program: Command) {
           };
           updateJobStatus(job.jobId, 'failed', errOutput.error!.message, { error: errOutput.error });
           outputResult(errOutput, isJson);
-          process.exit(ExitCodes[KindleErrorCode.EPUB_INVALID]);
+          process.exitCode = ExitCodes[KindleErrorCode.EPUB_INVALID];
+          return;
         }
 
         updateJobStatus(job.jobId, 'validated', 'EPUB 结构有效性检验通过', { outputPath: targetEpubPath });
@@ -178,7 +191,8 @@ export function registerSendCommand(program: Command) {
           };
           updateJobStatus(job.jobId, 'failed', errOutput.error!.message, { error: errOutput.error });
           outputResult(errOutput, isJson);
-          process.exit(ExitCodes[KindleErrorCode.DELIVERY_FAILED]);
+          process.exitCode = ExitCodes[KindleErrorCode.DELIVERY_FAILED];
+          return;
         }
 
         updateJobStatus(job.jobId, 'provider_accepted', '邮件服务商已接受请求，尚未确认 Amazon 或设备端接收');
@@ -218,7 +232,8 @@ export function registerSendCommand(program: Command) {
         };
         updateJobStatus(job.jobId, 'failed', message, { error: errOutput.error });
         outputResult(errOutput, isJson);
-        process.exit(ExitCodes[KindleErrorCode.CONVERSION_FAILED]);
+        process.exitCode = ExitCodes[KindleErrorCode.CONVERSION_FAILED];
+        return;
       }
     });
 }

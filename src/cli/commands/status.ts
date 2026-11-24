@@ -3,15 +3,19 @@ import { getJob, listRecentJobs } from '../../core/tracker';
 import { logger } from '../../core/logger';
 import { ExitCodes, KindleErrorCode, MachineOutput } from '../../types';
 
-export function registerStatusCommand(program: Command) {
+export function registerStatusCommand(program: Command): void {
   program
     .command('status [jobId]')
     .alias('jobs')
     .description('查看任务投递状态或历史任务列表')
-    .action(async (jobId?: string) => {
-      const globalOpts = program.opts();
-      const isJson = !!globalOpts.json;
-      logger.setDebug(!!globalOpts.debug);
+    .option('--json', '以机器可读的 JSON 格式输出结果')
+    .option('--debug', '开启调试模式输出详细脱敏日志')
+    .action(async (jobId: string | undefined, _options: { json?: boolean; debug?: boolean }, cmd: Command) => {
+      const globalOpts = cmd.optsWithGlobals<{ json?: boolean; debug?: boolean }>();
+      const isJson = Boolean(globalOpts.json || program.opts().json);
+      const isDebug = Boolean(globalOpts.debug || program.opts().debug);
+      logger.setJsonMode(isJson);
+      logger.setDebug(isDebug);
 
       if (jobId) {
         const job = getJob(jobId);
@@ -30,7 +34,8 @@ export function registerStatusCommand(program: Command) {
           } else {
             logger.error(errOutput.error!.message);
           }
-          process.exit(ExitCodes[KindleErrorCode.INVALID_PARAMS]);
+          process.exitCode = ExitCodes[KindleErrorCode.INVALID_PARAMS];
+          return;
         }
 
         const output: MachineOutput = {

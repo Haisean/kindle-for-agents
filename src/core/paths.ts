@@ -29,10 +29,29 @@ export function getStateBaseDir(
   return env.XDG_DATA_HOME || path.join(env.HOME || os.homedir(), '.local', 'share');
 }
 
-export function getProductConfigDir(): string {
-  return path.join(getConfigBaseDir(), STORAGE_KEY);
+export function getProductConfigDir(
+  platform: NodeJS.Platform = process.platform,
+  env: NodeJS.ProcessEnv = process.env
+): string {
+  if (env.KINDLE_BRIDGE_CONFIG_DIR) {
+    return env.KINDLE_BRIDGE_CONFIG_DIR;
+  }
+  return path.join(getConfigBaseDir(platform, env), STORAGE_KEY);
 }
 
-export function getProductStateDir(): string {
-  return path.join(getStateBaseDir(), STORAGE_KEY);
+export function getProductStateDir(
+  platform: NodeJS.Platform = process.platform,
+  env: NodeJS.ProcessEnv = process.env
+): string {
+  if (env.KINDLE_BRIDGE_STATE_DIR) {
+    return env.KINDLE_BRIDGE_STATE_DIR;
+  }
+  return path.join(getStateBaseDir(platform, env), STORAGE_KEY);
+}
+
+export function getProductTempDir(
+  platform: NodeJS.Platform = process.platform,
+  env: NodeJS.ProcessEnv = process.env
+): string {
+  return path.join(getProductStateDir(platform, env), 'temp');
 }

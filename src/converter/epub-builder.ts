@@ -44,26 +44,79 @@ blockquote {
   margin: 1em 2em;
   font-style: italic;
 }
+blockquote p {
+  text-indent: 0;
+}
 img {
   max-width: 100%;
   height: auto;
+}
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 1em 0;
+  font-size: 0.9em;
+}
+th, td {
+  border: 1px solid #666;
+  padding: 0.4em 0.6em;
+  text-align: left;
+  vertical-align: top;
+}
+th {
+  background-color: #f0f0f0;
+  font-weight: bold;
+}
+pre {
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  background-color: #f5f5f5;
+  border: 1px solid #ddd;
+  padding: 0.6em;
+  margin: 0.8em 0;
+  font-family: monospace;
+  font-size: 0.88em;
+  text-indent: 0;
+}
+code {
+  font-family: monospace;
+  font-size: 0.9em;
+}
+hr {
+  border: none;
+  border-top: 1px solid #999;
+  margin: 1.5em 0;
 }
 `;
   zip.file('OEBPS/style.css', cssContent);
 
   const uuid = `urn:uuid:${generateUUID()}`;
   const modifiedDate = new Date().toISOString().replace(/\.\d{3}Z$/, 'Z');
+  const safeLang = escapeXml(doc.language);
 
   // Handle Cover if specified
-  let coverManifestItem = '';
+  const extraManifestItems: string[] = [];
   let coverMetaItem = '';
   if (doc.coverPath && fs.existsSync(doc.coverPath)) {
     const coverExt = path.extname(doc.coverPath);
     const coverMime = mime.lookup(coverExt) || 'image/jpeg';
     const coverData = fs.readFileSync(doc.coverPath);
     zip.file(`OEBPS/cover${coverExt}`, coverData);
-    coverManifestItem = `<item id="cover-image" href="cover${coverExt}" media-type="${coverMime}" properties="cover-image"/>`;
+    extraManifestItems.push(
+      `<item id="cover-image" href="cover${escapeXml(coverExt)}" media-type="${escapeXml(coverMime)}" properties="cover-image"/>`
+    );
     coverMetaItem = `<meta name="cover" content="cover-image"/>`;
+  }
+
+  // Handle Embedded Images
+  if (doc.images && doc.images.length > 0) {
+    for (const img of doc.images) {
+      zip.file(`OEBPS/${img.href}`, img.data);
+      extraManifestItems.push(
+        `<item id="${escapeXml(img.id)}" href="${escapeXml(img.href)}" media-type="${escapeXml(img.mediaType)}"/>`
+      );
+    }
   }
 
   // Generate XHTML Chapters
@@ -76,13 +129,13 @@ img {
     const filename = `${chap.id}.xhtml`;
     const xhtmlContent = `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE html>
-<html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops" xml:lang="${doc.language}" lang="${doc.language}">
+<html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops" xml:lang="${safeLang}" lang="${safeLang}">
 <head>
   <title>${escapeXml(chap.title)}</title>
   <link rel="stylesheet" type="text/css" href="style.css"/>
 </head>
 <body>
-  <section epub:type="chapter" id="${chap.id}">
+  <section epub:type="chapter" id="${escapeXml(chap.id)}">
     <h2>${escapeXml(chap.title)}</h2>
     ${chap.htmlContent}
   </section>
@@ -91,20 +144,20 @@ img {
 
     zip.file(`OEBPS/${filename}`, xhtmlContent);
 
-    manifestItems.push(`<item id="${chap.id}" href="${filename}" media-type="application/xhtml+xml"/>`);
-    spineItems.push(`<itemref idref="${chap.id}"/>`);
-    navListItems.push(`<li><a href="${filename}">${escapeXml(chap.title)}</a></li>`);
+    manifestItems.push(`<item id="${escapeXml(chap.id)}" href="${escapeXml(filename)}" media-type="application/xhtml+xml"/>`);
+    spineItems.push(`<itemref idref="${escapeXml(chap.id)}"/>`);
+    navListItems.push(`<li><a href="${escapeXml(filename)}">${escapeXml(chap.title)}</a></li>`);
     ncxNavPoints.push(`
     <navPoint id="navPoint-${idx + 1}" playOrder="${idx + 1}">
       <navLabel><text>${escapeXml(chap.title)}</text></navLabel>
-      <content src="${filename}"/>
+      <content src="${escapeXml(filename)}"/>
     </navPoint>`);
   });
 
   // 4. OEBPS/nav.xhtml (EPUB 3 Navigation)
   const navXhtml = `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE html>
-<html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops" xml:lang="${doc.language}" lang="${doc.language}">
+<html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops" xml:lang="${safeLang}" lang="${safeLang}">
 <head>
   <title>目录</title>
   <link rel="stylesheet" type="text/css" href="style.css"/>
@@ -138,22 +191,30 @@ img {
   zip.file('OEBPS/toc.ncx', tocNcx);
 
   // 6. OEBPS/content.opf
+  const allManifestLines = [
+    '<item id="nav" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/>',
+    '<item id="ncx" href="toc.ncx" media-type="application/x-dtbncx+xml"/>',
+    '<item id="style" href="style.css" media-type="text/css"/>',
+    ...extraManifestItems,
+    ...manifestItems
+  ];
+
+  const metadataLines = [
+    `<dc:identifier id="pub-id">${uuid}</dc:identifier>`,
+    `<dc:title>${escapeXml(doc.title)}</dc:title>`,
+    `<dc:creator>${escapeXml(doc.author)}</dc:creator>`,
+    `<dc:language>${safeLang}</dc:language>`,
+    `<meta property="dcterms:modified">${modifiedDate}</meta>`,
+    ...(coverMetaItem ? [coverMetaItem] : [])
+  ];
+
   const contentOpf = `<?xml version="1.0" encoding="UTF-8"?>
 <package xmlns="http://www.idpf.org/2007/opf" unique-identifier="pub-id" version="3.0">
   <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
-    <dc:identifier id="pub-id">${uuid}</dc:identifier>
-    <dc:title>${escapeXml(doc.title)}</dc:title>
-    <dc:creator>${escapeXml(doc.author)}</dc:creator>
-    <dc:language>${doc.language}</dc:language>
-    <meta property="dcterms:modified">${modifiedDate}</meta>
-    ${coverMetaItem}
+    ${metadataLines.join('\n    ')}
   </metadata>
   <manifest>
-    <item id="nav" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/>
-    <item id="ncx" href="toc.ncx" media-type="application/x-dtbncx+xml"/>
-    <item id="style" href="style.css" media-type="text/css"/>
-    ${coverManifestItem}
-    ${manifestItems.join('\n    ')}
+    ${allManifestLines.join('\n    ')}
   </manifest>
   <spine toc="ncx">
     ${spineItems.join('\n    ')}

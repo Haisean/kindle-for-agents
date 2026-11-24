@@ -28,6 +28,10 @@ const MACOS_KEYCHAIN_SERVICE = 'com.kindle-for-agents.smtp-credentials';
 const MACOS_KEYCHAIN_ACCOUNT = 'current-user';
 const MACOS_KEYCHAIN_PAYLOAD_PREFIX = 'kindle-for-agents:v1:';
 
+function getMacOSKeychainService(): string {
+  return process.env.KINDLE_FOR_AGENTS_KEYCHAIN_SERVICE || MACOS_KEYCHAIN_SERVICE;
+}
+
 export function getCredentialStorageDescription(): string {
   if (process.platform === 'win32') {
     return 'Windows 当前用户 DPAPI';
@@ -138,7 +142,7 @@ function unprotectForCurrentWindowsUser(cipherText: string): string {
   return Buffer.from(output, 'base64').toString('utf8');
 }
 
-function saveToMacOSKeychain(creds: CredentialStore): void {
+function saveToMacOSKeychain(creds: CredentialStore, service = getMacOSKeychainService()): void {
   // `security add-generic-password -w <password>` exposes the password through
   // the child process argv. Interactive mode accepts the command over stdin,
   // keeping the credential payload out of process listings. Base64 also makes
@@ -148,17 +152,17 @@ function saveToMacOSKeychain(creds: CredentialStore): void {
   runSecurityInteractive([
     'add-generic-password',
     '-a', MACOS_KEYCHAIN_ACCOUNT,
-    '-s', MACOS_KEYCHAIN_SERVICE,
+    '-s', service,
     '-w', encodedPayload,
     '-U'
   ].join(' '));
 }
 
-function loadFromMacOSKeychain(): CredentialStore {
+function loadFromMacOSKeychain(service = getMacOSKeychainService()): CredentialStore {
   const plainText = runSecurity([
     'find-generic-password',
     '-a', MACOS_KEYCHAIN_ACCOUNT,
-    '-s', MACOS_KEYCHAIN_SERVICE,
+    '-s', service,
     '-w'
   ]);
   const serialized = plainText.startsWith(MACOS_KEYCHAIN_PAYLOAD_PREFIX)
@@ -170,11 +174,11 @@ function loadFromMacOSKeychain(): CredentialStore {
   return JSON.parse(serialized) as CredentialStore;
 }
 
-function clearMacOSKeychain(): void {
+function clearMacOSKeychain(service = getMacOSKeychainService()): void {
   runSecurity([
     'delete-generic-password',
     '-a', MACOS_KEYCHAIN_ACCOUNT,
-    '-s', MACOS_KEYCHAIN_SERVICE
+    '-s', service
   ], true);
 }
 
@@ -186,6 +190,7 @@ export function saveCredentials(creds: CredentialStore): void {
   }
 
   let payload: EncryptedCredentialPayload;
+  const macService = getMacOSKeychainService();
   if (process.platform === 'win32') {
     payload = {
       version: 2,
@@ -193,11 +198,11 @@ export function saveCredentials(creds: CredentialStore): void {
       data: protectForCurrentWindowsUser(JSON.stringify(creds))
     };
   } else if (process.platform === 'darwin') {
-    saveToMacOSKeychain(creds);
+    saveToMacOSKeychain(creds, macService);
     payload = {
       version: 2,
       provider: 'macos-keychain-current-user',
-      service: MACOS_KEYCHAIN_SERVICE,
+      service: macService,
       account: MACOS_KEYCHAIN_ACCOUNT
     };
   } else {
@@ -211,7 +216,7 @@ export function saveCredentials(creds: CredentialStore): void {
     });
   } catch (error) {
     if (process.platform === 'darwin') {
-      clearMacOSKeychain();
+      clearMacOSKeychain(macService);
     }
     throw error;
   }
@@ -232,12 +237,13 @@ export function loadCredentials(): CredentialStore | null {
     if (payload.provider === 'windows-dpapi-current-user' && payload.data) {
       return JSON.parse(unprotectForCurrentWindowsUser(payload.data)) as CredentialStore;
     }
+    const macService = getMacOSKeychainService();
     if (
       payload.provider === 'macos-keychain-current-user'
-      && payload.service === MACOS_KEYCHAIN_SERVICE
+      && payload.service === macService
       && payload.account === MACOS_KEYCHAIN_ACCOUNT
     ) {
-      return loadFromMacOSKeychain();
+      return loadFromMacOSKeychain(macService);
     }
     throw new Error('不支持的凭据格式，请重新运行 kindle setup');
   } catch (err) {

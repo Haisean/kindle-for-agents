@@ -54,29 +54,66 @@ try {
   Pop-Location
 }
 
-New-Item -ItemType Directory -Path $skillRoot -Force | Out-Null
 New-Item -ItemType Directory -Path $backupRoot -Force | Out-Null
 
+$targetEntries = @(
+  @{
+    Label = 'agents'
+    Root = $skillRoot
+  }
+)
+
+$claudeDir = [System.IO.Path]::GetFullPath((Join-Path $userProfilePath '.claude'))
+if (Test-Path -LiteralPath $claudeDir -PathType Container) {
+  $targetEntries += @{
+    Label = 'claude'
+    Root = [System.IO.Path]::GetFullPath((Join-Path $claudeDir 'skills'))
+  }
+}
+
+$geminiConfigDir = [System.IO.Path]::GetFullPath((Join-Path $userProfilePath '.gemini\config'))
+$geminiAntigravityDir = [System.IO.Path]::GetFullPath((Join-Path $userProfilePath '.gemini\antigravity'))
+if (
+  (Test-Path -LiteralPath $geminiConfigDir -PathType Container) -or
+  (Test-Path -LiteralPath $geminiAntigravityDir -PathType Container)
+) {
+  $targetEntries += @{
+    Label = 'gemini'
+    Root = [System.IO.Path]::GetFullPath((Join-Path $geminiConfigDir 'skills'))
+  }
+}
+
 $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
-foreach ($skillName in @('kindle-for-agents', 'kindle-setup', 'send-to-kindle', 'kindle-bridge')) {
-  $source = [System.IO.Path]::GetFullPath((Join-Path $repoRoot "skills\$skillName"))
-  $destination = [System.IO.Path]::GetFullPath((Join-Path $skillRoot $skillName))
+foreach ($entry in $targetEntries) {
+  $targetLabel = $entry.Label
+  $targetRoot = $entry.Root
 
-  if (-not $source.StartsWith($repoRoot, [System.StringComparison]::OrdinalIgnoreCase)) {
-    throw "Skill source is outside the repository: $source"
-  }
-  if (-not $destination.StartsWith($skillRoot, [System.StringComparison]::OrdinalIgnoreCase)) {
-    throw "Skill destination is outside the shared skill directory: $destination"
+  if (-not $targetRoot.StartsWith($userProfilePath, [System.StringComparison]::OrdinalIgnoreCase)) {
+    throw "The skill destination is outside the current user profile: $targetRoot"
   }
 
-  if (Test-Path -LiteralPath $destination) {
-    $backup = Join-Path $backupRoot "$skillName-$stamp"
-    Move-Item -LiteralPath $destination -Destination $backup
-    Write-Host "Backed up existing skill: $backup"
-  }
+  New-Item -ItemType Directory -Path $targetRoot -Force | Out-Null
 
-  Copy-Item -LiteralPath $source -Destination $destination -Recurse
-  Write-Host "Installed skill: $skillName"
+  foreach ($skillName in @('kindle-for-agents', 'kindle-setup', 'send-to-kindle', 'kindle-bridge')) {
+    $source = [System.IO.Path]::GetFullPath((Join-Path $repoRoot "skills\$skillName"))
+    $destination = [System.IO.Path]::GetFullPath((Join-Path $targetRoot $skillName))
+
+    if (-not $source.StartsWith($repoRoot, [System.StringComparison]::OrdinalIgnoreCase)) {
+      throw "Skill source is outside the repository: $source"
+    }
+    if (-not $destination.StartsWith($targetRoot, [System.StringComparison]::OrdinalIgnoreCase)) {
+      throw "Skill destination is outside the shared skill directory: $destination"
+    }
+
+    if (Test-Path -LiteralPath $destination) {
+      $backup = Join-Path $backupRoot "$targetLabel-$skillName-$stamp"
+      Move-Item -LiteralPath $destination -Destination $backup
+      Write-Host "Backed up existing skill: $backup"
+    }
+
+    Copy-Item -LiteralPath $source -Destination $destination -Recurse
+    Write-Host "Installed skill: $skillName -> $destination"
+  }
 }
 
 Write-Host ''

@@ -1,28 +1,31 @@
 # Kindle for Agents
 
-> 本地优先、可被多个 AI Agent 共用的 Kindle 投送能力。
+> 专为 Personal AI Agent 打造的本地优先 Kindle 投送原语（CLI + Skills）。
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Node.js](https://img.shields.io/badge/Node.js-LTS%20(22%2F24)-339933.svg)](https://nodejs.org/)
 [![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20macOS-lightgrey.svg)](#支持范围与前置条件)
 
-让你的 AI Agent 把本地的调研报告、读书笔记或长文章（Markdown / TXT / HTML / EPUB）自动整理为符合 Kindle 规范的可重排 EPUB，直接推送到你的 Kindle 设备或 Kindle App。
+它不是面向人类的电子书库管理软件，而是帮你打通“AI Agent 产出 → Kindle 无干扰深度阅读”最后一公里的能力底座：让你的 Agent 把调研报告、综合笔记或长篇总结（Markdown / TXT / HTML / EPUB）整理为可重排 EPUB，稳定推送到你的 Kindle 设备或 Kindle App。
 
 ---
 
-## 核心特性
+## 为什么做它（以及它不是什么）
 
-- **多 Agent 一次配置、全局共用**：同一本机用户下，只需首次完成一次配置，后续任何 AI Agent 或命令行都能直接调用 `kindle send` 投送文档。
-- **自动转换与排版校验**：内置转换管线，将 `.md` / `.txt` / `.html` / `.epub` 统一处理为适合 Kindle 阅读的可重排 EPUB。
-- **本地优先，零中转服务器**：直接使用你自己的邮箱发出，不经过第三方中转邮箱，也不上传任何文档历史。
-- **系统级凭据隔离**：邮箱授权码仅保存在 Windows DPAPI 保护区或 macOS 登录钥匙串中，不进入聊天记录或明文配置文件。
+1. **面向 Agent 的确定性调用契约，而非人类图形界面**：提供纯净可解析的 `--json` 机器输出（参数置于子命令前后均可，过程日志绝不污染 `stdout`）、`capability` 就绪态检查，以及严格的 `provider_accepted`（邮件服务商已接收）与 `device_confirmed`（设备实机确认）状态边界——从源头避免 Agent 在对话中索要密码、明文落盘或虚报“设备已收到”。
+2. **一次初始化、跨 Agent 共用、日常低维护**：将繁琐的 SMTP 授权与 Amazon 可信发件人核对收敛为本机一次性配置；凭据由系统级保护区（Windows DPAPI / macOS 登录钥匙串）隔离保存，无需自建或运维任何中转服务器；内置多宿主同步能力（`kindle skills install`），可自动将 Skills 分发至 `~/.agents/skills/` 及本机已安装的 `~/.claude/skills/`、`~/.gemini/config/skills/` 等目录。
+3. **单一职责的轻量底座，与 Calibre 错位互补**：不引入重型浏览器自动化组件，仅保留文档解析转换（支持 Markdown GFM 表格、代码块与本地相对路径图片内嵌打包）、EPUB 结构校验与 SMTP 投递管线。它**不做本地书库管理、不做出版级复杂精排，也不试图替代 Calibre**。
+
+> **适用与不适用说明**：如果你主要需要图形化管理电子书库、批量整理元数据或复杂排版转换，**Calibre（及其 CLI）仍是更好的选择**；本项目专门面向每天与 Personal Agent 深度协作、希望在对话结尾顺口说一句“发到我 Kindle”即可稳定送达的用户。
+
+---
 
 ## 支持范围与前置条件
 
-- **输入格式**：`.md`、`.txt`、`.html`、`.epub`（输出为可重排 EPUB）
-- **操作系统**：Windows 10/11、macOS（需 Node.js LTS）
-- **发件邮箱**：QQ 邮箱（使用 SMTP 授权码）
-- **Kindle 账户**：Amazon.com 账户（通过 [Amazon 管理内容与设备](https://www.amazon.com/hz/mycd/myx) 配置可信发件人；暂不支持已停运的 Amazon.cn）
+- **输入格式**：`.md`、`.txt`、`.html`、`.epub`（输出为可重排 EPUB；Markdown/HTML 支持 GFM 表格、代码块及本地相对路径图片自动打包）
+- **操作系统**：Windows 10/11、macOS（需 Node.js LTS 22 / 24）
+- **发件邮箱**：Agent 引导向导默认支持 QQ 邮箱（使用 SMTP 授权码）；手动运行 `kindle setup` 也支持 163、Gmail、Outlook 等自定义 SMTP 邮箱
+- **Kindle 账户**：基于仍在正常运营的国际 Amazon Send-to-Kindle 邮箱通道（默认 `amazon.com`，可通过 [Amazon 管理内容与设备](https://www.amazon.com/hz/mycd/myx) 配置可信发件人，支持通过 `--region` 指定 `amazon.co.jp`、`amazon.co.uk`、`amazon.de` 等站点；**不支持已停运的中国区 `Amazon.cn`**）
 
 ---
 
@@ -38,8 +41,9 @@
 <summary>Agent 执行要点（供 Agent 阅读）</summary>
 
 1. 先识别当前操作系统，再运行对应安装脚本：Windows 运行 `scripts/bootstrap.ps1`，macOS 运行 `scripts/bootstrap.sh`（不要跨系统执行）。
-2. 安装完成后检查 `kindle --json capability`；若未就绪，按 [`skills/kindle-setup/SKILL.md`](skills/kindle-setup/SKILL.md) 连续引导 QQ 邮箱、Amazon.com 可信发件人、测试投递与实机确认。
-3. 测试邮件被服务商接收（`provider_accepted`）不等于部署完成；需等用户在 Kindle 上确认收到测试书后执行 `kindle --json confirm <jobId>`，直至 `kindle --json capability` 返回 `data.state: "ready"` 且 `data.ready: true`。
+2. 安装脚本会自动安装全局 `kindle` 命令，并将 4 个内置 Skills 同步至 `~/.agents/skills/`（若本机存在 `~/.claude/skills/` 或 `~/.gemini/config/skills/` 也会自动同步）。
+3. 安装完成后检查 `kindle --json capability`；若未就绪，按 [`skills/kindle-setup/SKILL.md`](skills/kindle-setup/SKILL.md) 连续引导 QQ 邮箱、Amazon 可信发件人（默认 `amazon.com`，可通过 `--region` 指定其他国际站点）、测试投递与实机确认。
+4. 测试邮件被服务商接收（`provider_accepted`）不等于部署完成；需等用户在 Kindle 上确认收到测试书后执行 `kindle --json confirm <jobId>`，直至 `kindle --json capability` 返回 `data.state: "ready"` 且 `data.ready: true`。
 
 </details>
 
@@ -57,7 +61,7 @@ powershell -ExecutionPolicy Bypass -File .\scripts\bootstrap.ps1
 bash ./scripts/bootstrap.sh
 ```
 
-脚本会为当前用户安装全局 `kindle` 命令及内置 Agent Skills。首次使用运行 `kindle setup` 完成配置，并在真实 Kindle / Kindle App 收到测试书后执行：
+脚本会为当前用户安装全局 `kindle` 命令，并将 4 个内置 Skills 同步到 `~/.agents/skills/`（若本机已安装 Claude Code / Gemini 等 Agent 宿主，也会自动同步至 `~/.claude/skills/` 与 `~/.gemini/config/skills/`）。首次使用可运行 `kindle setup` 进行通用 SMTP 配置（QQ 邮箱用户也可运行 `kindle setup --provider qq` 启动引导向导），并在真实 Kindle / Kindle App 收到测试书后执行：
 
 ```bash
 kindle --json confirm <jobId>
@@ -90,9 +94,10 @@ kindle --json send "<文档绝对路径>"
 | `kindle jobs [jobId]` | 查看历史投递任务状态 |
 | `kindle confirm [jobId]` | 确认 Kindle 设备端已收到文档 |
 | `kindle doctor` | 诊断本机环境、凭据与发送通道 |
+| `kindle skills [install]` | 将内置 Skills 同步安装到本机已检测到的多个 Agent 宿主目录（支持 `--target`） |
 | `kindle reset` | 清除当前用户的本地状态、加密凭据与任务历史 |
 
-所有配置由 `kindle` CLI 统一维护，用户和 Agent 均无需手动编辑配置文件。
+所有配置由 `kindle` CLI 统一维护，用户和 Agent 均无需手动编辑配置文件。全局选项 `--json` 和 `--debug` 放在子命令之前或之后均可识别（例如 `kindle --json capability` 与 `kindle capability --json` 等效）。
 
 ---
 
@@ -110,7 +115,7 @@ kindle --json send "<文档绝对路径>"
 项目早期曾使用 `kindle-bridge` 作为名称。为平滑兼容已有安装：
 
 - 内置保留了兼容路由 Skill [`kindle-bridge`](skills/kindle-bridge/SKILL.md) 以及旧命令别名（`connect` → `setup`、`status` → `jobs`）。
-- 本地存储路径与钥匙串键名仍沿用 `kindle-bridge`，升级改名不会丢失已有配置、加密凭据或任务历史。
+- 本地存储路径仍沿用 `kindle-bridge` 以保持向后兼容，升级改名不会丢失已有配置或任务历史；macOS 钥匙串服务名采用 `com.kindle-for-agents.smtp-credentials`。
 
 </details>
 
@@ -122,7 +127,18 @@ kindle --json send "<文档绝对路径>"
 - **本地目录**：
   - 配置：Windows `%APPDATA%\kindle-bridge` ｜ macOS `~/Library/Application Support/kindle-bridge`
   - 缓存与任务：Windows `%LOCALAPPDATA%\kindle-bridge` ｜ macOS `~/Library/Caches/kindle-bridge`
+  - 临时转换目录：EPUB 转换产生的临时文件均隔离存放在系统缓存目录中（Windows `%LOCALAPPDATA%\kindle-bridge\temp` ｜ macOS `~/Library/Caches/kindle-bridge/temp`），不会污染你的当前工作目录。
 - **交互边界**：Amazon 登录、OTP、验证码及 QQ 安全验证均只由用户在官方页面完成，不经由项目服务器中转。
+
+---
+
+## 卸载
+
+如需完全移除本工具，可按以下步骤清理：
+
+1. 运行 `kindle reset` 清除本地配置、加密凭据与任务历史。
+2. 运行 `npm uninstall -g kindle-for-agents` 卸载全局 `kindle` 命令。
+3. 删除 `~/.agents/skills/` 下对应的 4 个内置 Skill 目录（`kindle-for-agents`、`kindle-setup`、`send-to-kindle`、`kindle-bridge`）；若曾同步至其他 Agent 宿主目录，一并删除 `~/.claude/skills/` 与 `~/.gemini/config/skills/` 下的对应目录。
 
 ---
 
@@ -134,7 +150,7 @@ npm run build
 npm test
 ```
 
-CI 会在 PR 和主分支更新时于 Windows（Node.js 22 / 24）上自动执行安装、构建、测试与打包检查（macOS 钥匙串路径目前通过模拟命令覆盖测试）。
+GitHub Actions 会在 PR 和主分支更新时于 **Windows 与 macOS**（`windows-latest` & `macos-latest`，Node.js 22 / 24）双平台自动执行安装、构建、测试与 `npm pack --dry-run` 打包检查。
 
 ---
 

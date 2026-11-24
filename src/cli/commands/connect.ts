@@ -11,7 +11,7 @@ import {
   ensureCredentialStorageSupported
 } from '../../core/credentials';
 import { logger, maskEmail } from '../../core/logger';
-import { launchAmazonWizard } from '../../wizard/browser';
+import { getProductTempDir } from '../../core/paths';
 import { openInSystemBrowser } from '../../wizard/external-browser';
 import { launchMacSetupTerminal } from '../../wizard/terminal';
 import { EmailTransport } from '../../transport/email';
@@ -40,6 +40,8 @@ export function registerConnectCommand(program: Command) {
     .option('--agent-assisted', 'Agent 已完成浏览器导航与设置核对', false)
     .option('--test-send-confirmed', '用户已在 Agent 对话中明确同意发送测试书', false)
     .option('--open-terminal', 'macOS：在可见 Terminal 窗口中打开授权码安全输入', false)
+    .option('--json', '以机器可读的 JSON 格式输出结果')
+    .option('--debug', '开启调试模式输出详细脱敏日志')
     .action(async (options: {
       region?: string;
       provider?: string;
@@ -51,10 +53,14 @@ export function registerConnectCommand(program: Command) {
       testSendConfirmed?: boolean;
       browser?: boolean;
       openTerminal?: boolean;
-    }) => {
-      const globalOpts = program.opts();
-      const isJson = !!globalOpts.json;
-      logger.setDebug(!!globalOpts.debug);
+      json?: boolean;
+      debug?: boolean;
+    }, cmd: Command) => {
+      const globalOpts = cmd.optsWithGlobals<{ json?: boolean; debug?: boolean }>();
+      const isJson = Boolean(globalOpts.json || program.opts().json);
+      const isDebug = Boolean(globalOpts.debug || program.opts().debug);
+      logger.setJsonMode(isJson);
+      logger.setDebug(isDebug);
 
       const askQuestion = (query: string): Promise<string> => {
         return new Promise(resolve => {
@@ -136,26 +142,16 @@ export function registerConnectCommand(program: Command) {
           );
         }
 
-        let discoveredKindleEmail: string | undefined = undefined;
-
-        // Option 1: Browser Wizard
+        // Option 1: Open Amazon Settings in System Default Browser
         if (options.browser) {
-          logger.info('正在打开浏览器引导页面...');
-          const wizard = await launchAmazonWizard(options.region);
-          logger.info('\n💡 [自动化提示] 请在打开的浏览器窗口中登录您的 Amazon 账号。');
-          logger.info('   完成登录后，程序会尝试识别 Kindle 邮箱；页面设置仍需由您核对。');
-
-          const discovered = await wizard.autoDiscover(options.smtpUser);
-          if (discovered.kindleEmail) {
-            discoveredKindleEmail = discovered.kindleEmail;
-          }
-          await wizard.close();
+          logger.info('🌐 已在系统默认浏览器中打开 Amazon Send-to-Kindle 设置页面（可直接复用您已登录的浏览器会话）。');
+          logger.info(`   如果浏览器没有自动打开，请访问: ${amazonSettingsUrl}`);
+          logger.info('   请在 “Manage Your Content and Devices” 页面点击右侧英文标签 “Preferences”，展开 “Personal Document Settings” 查看 Kindle 接收邮箱并核对认可发件人列表。');
+          openInSystemBrowser(amazonSettingsUrl);
         }
 
         // Collect Credentials interactively if missing from flags
-        let kindleEmail = options.kindleEmail
-          || process.env.KINDLE_BRIDGE_KINDLE_EMAIL
-          || discoveredKindleEmail;
+        let kindleEmail = options.kindleEmail || process.env.KINDLE_BRIDGE_KINDLE_EMAIL;
         let smtpHost = options.smtpHost;
         let smtpPort = options.smtpPort ? parseInt(options.smtpPort, 10) : 587;
         let smtpUser = options.smtpUser || process.env.KINDLE_BRIDGE_SMTP_USER;
@@ -301,7 +297,10 @@ export function registerConnectCommand(program: Command) {
 
         // Test Delivery Process with Sample Test EPUB
         logger.info('\n🧪 正在生成并发送无版权风险测试 EPUB 进行连通性校验...');
-        const tempDir = path.join(process.cwd(), '.kindle-for-agents-temp');
+        const tempDir = getProductTempDir();
+        if (!fs.existsSync(tempDir)) {
+          fs.mkdirSync(tempDir, { recursive: true });
+        }
         testEpubPath = path.join(tempDir, `test_connection_${Date.now()}.epub`);
 
         const testDoc = {

@@ -7,8 +7,8 @@ Never start the CLI before `QQ_CODE`, `AMAZON_CHECK`, and `TEST_APPROVAL` are al
 | Stage | Agent action | User-only action | Required reply |
 |---|---|---|---|
 | `QQ_OPEN` | Actively open `https://mail.qq.com/` in the browser with the user's existing session before the first pause. Do not ask the user to open the URL before attempting it yourself. | Sign in if required. | `QQ已登录` |
-| `QQ_SETTINGS` | From QQ Mail, locate `设置` in the upper-right corner. Then locate `账号与安全` near the lower-left of the settings sidebar. | Click the named target when browser control is unavailable. | `已进入账号与安全` |
-| `QQ_SECURITY` | On the separate 账号与安全 page, select `安全设置`. Then locate `POP3/IMAP/SMTP/Exchange/CardDAV 服务`. | Complete identity verification if prompted. | `QQ安全验证已完成` |
+| `QQ_SETTINGS` | From QQ Mail, locate `设置` in the upper-right corner. Then locate `账号与安全` near the lower-left of the settings sidebar. | Click each named target one step at a time when browser control is unavailable. | `已打开QQ设置` → `已进入账号与安全` |
+| `QQ_SECURITY` | On the separate 账号与安全 page, select `安全设置`. Then locate `POP3/IMAP/SMTP/Exchange/CardDAV 服务`. | Locate the service when browser control is unavailable, and complete identity verification if prompted. | `已找到邮箱服务` / `QQ安全验证已完成` |
 | `QQ_CODE` | Stop at 生成授权码. Do not read the code or clipboard. In the same instruction that asks the user to copy it, explicitly say not to close the QQ page after copying. | Generate the code and click copy. Keep it in the clipboard; do not paste yet, and keep the QQ page open. | `授权码已复制` |
 | `AMAZON_OPEN` | Preserve the QQ page and open the exact stable URL `https://www.amazon.com/hz/mycd/myx` in a new browser tab or window. Never substitute an `amazon.cn` URL or an old deep link. | Sign in to Amazon.com if required. | `Amazon已登录` |
 | `AMAZON_PREFERENCES` | On `Manage Your Content and Devices`, click the visible English `Preferences` tab on the right, then expand `Personal Document Settings`. Never substitute translated click labels. | Click the named targets only when browser control is unavailable. | `已展开Personal Document Settings` |
@@ -120,7 +120,7 @@ Security settings:
 ```text
 当前在“账号与安全”页面，但邮箱服务不在普通账号设置里。
 现在只做一步：进入“安全设置”，再找到“POP3/IMAP/SMTP/Exchange/CardDAV 服务”。
-完成后回来回复：已找到邮箱服务
+完成后回来回复：已找到邮箱服务；若中途触发安全验证，完成验证后回复：QQ安全验证已完成
 ```
 
 Authorization code:
@@ -154,12 +154,21 @@ QQ 和 Amazon 设置已经全部核对。下一步粘贴授权码后，程序会
 允许则回复：允许发送测试书
 ```
 
-Hidden paste:
+Hidden paste (macOS):
 
 ```text
 macOS Terminal 安全输入窗口已经打开，这是整个流程唯一一次粘贴授权码。
-现在只做一步：在授权码提示后按 Ctrl+V，再按 Enter；输入内容不会显示。
+现在只做一步：在授权码提示后按 Command+V（⌘+V），再按 Enter；输入内容不会显示。
 如果没有看到 Terminal 窗口，不要把授权码发到聊天，回复：终端未打开
+成功粘贴后回来回复：授权码已粘贴
+```
+
+Hidden paste (Windows):
+
+```text
+本地交互式终端的安全输入提示已经打开，这是整个流程唯一一次粘贴授权码。
+现在只做一步：在授权码提示后按 Ctrl+V（或鼠标右键粘贴），再按 Enter；输入内容不会显示。
+如果没有看到交互式终端窗口，不要把授权码发到聊天，回复：终端未打开
 成功粘贴后回来回复：授权码已粘贴
 ```
 

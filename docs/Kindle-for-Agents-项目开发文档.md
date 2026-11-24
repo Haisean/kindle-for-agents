@@ -143,7 +143,7 @@ kindle connect
 ```powershell
 kindle send .\article.md
 kindle send .\book.epub --title "示例标题"
-kindle send .\notes\weekly.md --author "王祺" --json
+kindle --json send .\notes\weekly.md --author "示例作者"
 ```
 
 建议参数：
@@ -164,7 +164,7 @@ kindle send .\notes\weekly.md --author "王祺" --json
 
 ```powershell
 kindle status
-kindle status <job-id> --json
+kindle --json status <job-id>
 ```
 
 状态模型：
@@ -301,7 +301,7 @@ macOS:
   "amazonRegion": "amazon.com",
   "kindleAddressMasked": "w***@kindle.com",
   "transport": "user-oauth",
-  "defaultAuthor": "王祺",
+  "defaultAuthor": "示例作者",
   "language": "zh-CN",
   "keepGeneratedEpub": false,
   "connectedAt": "2026-07-22T00:00:00+08:00",
@@ -414,7 +414,7 @@ macOS:
 - CLI 能返回准确、不夸大的状态。
 - 用户在真实 Kindle 或 Kindle App 中确认测试书出现。
 - 第二次发送不需要重新打开 Amazon 设置页面。
-- `kindle send sample.md --json` 可供 AI 稳定解析。
+- `kindle --json send sample.md` 可供 AI 稳定解析。
 - `kindle doctor` 能识别至少授权失效、配置缺失和发送通道不可用。
 - README 包含安装、连接、发送、排错和卸载说明。
 
@@ -469,10 +469,10 @@ Skill 的核心目标是**封装底层能力与工具标准**，绝不干涉或�
 ### 15.2 交付给宿主 Agent 的能力字典与参考元数据
 
 #### 1. 命令行能力映射 (CLI Capabilities)
-- **环境与健康诊断**：`kindle doctor --json`（包含配置文件、存储权限、凭据库状态及 Playwright Chromium 浏览器引擎前置就绪检查）
-- **查看发送任务**：`kindle status [job_id] --json`
-- **文档转换与投递**：`kindle send <path> [--title <title>] [--dry-run] --json`
-- **凭据绑定与可视化向导**：`kindle connect [--browser] [--kindle-email ...] [--smtp-user ...] [--smtp-pass ...]`
+- **环境与健康诊断**：`kindle --json doctor`（包含配置文件、存储权限、凭据库状态及 Playwright Chromium 浏览器引擎前置就绪检查）
+- **查看发送任务**：`kindle --json status [job_id]`
+- **文档转换与投递**：`kindle --json send <path> [--title <title>] [--dry-run]`
+- **凭据绑定与可视化向导**：`kindle connect [--browser] [--kindle-email ...] [--smtp-user ...]`（SMTP 授权码仅通过隐藏的交互式终端提示输入，绝不作为 CLI 参数传入）
 
 #### 2. 绑定所需的 3 项基础要素 (Reference Prerequisites)
 当宿主 Agent 需要引导用户时，可参考以下 3 项必要信息：
@@ -484,13 +484,13 @@ Skill 的核心目标是**封装底层能力与工具标准**，绝不干涉或�
 宿主 Agent 可根据用户需求自主选用以下参考知识：
 - **浏览器协助**：调用 `kindle setup --browser` 可打开 Amazon.com“管理我的内容和设备”稳定入口 (`https://www.amazon.com/hz/mycd/myx`)，再进入偏好设置与个人文档设置。
 - **授权码位置**：
-  - QQ 邮箱：`mail.qq.com` -> 设置 -> 账户 -> POP3/SMTP 服务。
+  - QQ 邮箱：`mail.qq.com` -> 设置 -> 账号与安全 -> 安全设置 -> POP3/IMAP/SMTP/Exchange/CardDAV 服务。
   - 163 邮箱：`mail.163.com` -> 设置 -> POP3/SMTP/IMAP -> 新增授权密码。
   - Gmail：Google 账号安全中心 -> 应用专用密码。
 
 #### 4. 机器状态与边界规范
 - 当 CLI 返回 `provider_accepted` 时，Skill 告知宿主 Agent 该状态代表“邮件通道发送成功”，宿主 Agent 应据此进行客观说明，不误导用户为“Kindle 硬件已确认收到”。
-- 配置或授权缺失时，CLI 返回 `unconfigured` 错误码，宿主 Agent 可自主决定是否触发配置引导。
+- 配置或授权缺失时，CLI 返回 `KINDLE_CONFIG_MISSING` 错误码，宿主 Agent 可自主决定是否触发配置引导。
 
 ## 16. MCP 规划说明（已取消）
 

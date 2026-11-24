@@ -9,6 +9,7 @@ import {
 } from '../../core/credentials';
 import { getJobsDir, listRecentJobs } from '../../core/tracker';
 import { logger } from '../../core/logger';
+import { getProductTempDir } from '../../core/paths';
 import { EmailTransport } from '../../transport/email';
 import { MachineOutput } from '../../types';
 import { getCapabilityStatus } from '../../core/capability';
@@ -23,10 +24,14 @@ export function registerDoctorCommand(program: Command) {
   program
     .command('doctor')
     .description('诊断 Kindle for Agents 环境与配置状态')
-    .action(async () => {
-      const globalOpts = program.opts();
-      const isJson = !!globalOpts.json;
-      logger.setDebug(!!globalOpts.debug);
+    .option('--json', '以机器可读的 JSON 格式输出结果')
+    .option('--debug', '开启调试模式输出详细脱敏日志')
+    .action(async (_options: { json?: boolean; debug?: boolean }, cmd: Command) => {
+      const globalOpts = cmd.optsWithGlobals<{ json?: boolean; debug?: boolean }>();
+      const isJson = Boolean(globalOpts.json || program.opts().json);
+      const isDebug = Boolean(globalOpts.debug || program.opts().debug);
+      logger.setJsonMode(isJson);
+      logger.setDebug(isDebug);
 
       const checks: DoctorCheckItem[] = [];
 
@@ -142,7 +147,7 @@ export function registerDoctorCommand(program: Command) {
 
       // 4. EPUB Builder Temp Directory Check
       try {
-        const tempDir = path.join(process.cwd(), '.kindle-for-agents-temp');
+        const tempDir = getProductTempDir();
         if (!fs.existsSync(tempDir)) {
           fs.mkdirSync(tempDir, { recursive: true });
         }
@@ -179,31 +184,6 @@ export function registerDoctorCommand(program: Command) {
         });
       }
 
-      // 6. Browser Automation Engine Check (Playwright / Chromium)
-      try {
-        const { chromium } = await import('playwright');
-        const execPath = chromium.executablePath();
-        if (fs.existsSync(execPath)) {
-          checks.push({
-            name: '可选浏览器自动化',
-            passed: true,
-            message: `Chromium 浏览器组件就绪 (${execPath})`
-          });
-        } else {
-          checks.push({
-            name: '可选浏览器自动化',
-            passed: true,
-            message: 'Chromium 未安装；不影响图示人工引导与日常发送'
-          });
-        }
-      } catch (err) {
-        checks.push({
-          name: '可选浏览器自动化',
-          passed: true,
-          message: `浏览器自动化不可用；不影响图示人工引导与日常发送 (${(err as Error).message})`
-        });
-      }
-
       const allPassed = checks.every(c => c.passed);
       const output: MachineOutput<{ checks: DoctorCheckItem[] }> = {
         ok: allPassed,
@@ -223,7 +203,8 @@ export function registerDoctorCommand(program: Command) {
       }
 
       if (!allPassed) {
-        process.exit(1);
+        process.exitCode = 1;
+        return;
       }
     });
 }

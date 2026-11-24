@@ -1,6 +1,12 @@
 import fs from 'fs';
+import os from 'os';
 import path from 'path';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
+import {
+  BUNDLED_SKILLS,
+  detectTargetSkillRoots,
+  installBundledSkills
+} from '../src/core/skills-installer';
 
 describe('Kindle skills architecture', () => {
   const skillsRoot = path.join(process.cwd(), 'skills');
@@ -30,7 +36,7 @@ describe('Kindle skills architecture', () => {
 
   it('keeps first-run secrets and verification in the setup skill', () => {
     expect(setupText).not.toContain('[TODO');
-    expect(setupText).toContain('kindle capability --json');
+    expect(setupText).toContain('kindle --json capability');
     expect(setupText).toContain('data.ready: true');
     expect(stateMachine).toContain('授权码已复制');
     expect(stateMachine).toContain('授权码已粘贴');
@@ -89,5 +95,150 @@ describe('Kindle skills architecture', () => {
     expect(macBootstrap).toContain('npm uninstall --global kindle-bridge');
     expect(macBootstrap).toContain('.agents/skills');
     expect(macBootstrap).toContain('kindle --json capability');
+  });
+});
+
+describe('Multi-agent skills installer', () => {
+  const tempDirs: string[] = [];
+
+  function createTempHome(): string {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'kindle-skills-test-'));
+    tempDirs.push(dir);
+    return dir;
+  }
+
+  afterEach(() => {
+    while (tempDirs.length > 0) {
+      const dir = tempDirs.pop();
+      if (dir) {
+        fs.rmSync(dir, { recursive: true, force: true });
+      }
+    }
+  });
+
+  it('populates only .agents/skills when host config directories are absent', () => {
+    const homeDir = createTempHome();
+    const result = installBundledSkills({ homeDir });
+    const agentsRoot = path.join(homeDir, '.agents', 'skills');
+
+    expect(result.installedRoots).toEqual([agentsRoot]);
+    expect(result.skills).toEqual([...BUNDLED_SKILLS]);
+    expect(result.backups).toEqual([]);
+
+    for (const skill of BUNDLED_SKILLS) {
+      expect(
+        fs.existsSync(path.join(agentsRoot, skill, 'SKILL.md'))
+      ).toBe(true);
+    }
+
+    expect(fs.existsSync(path.join(homeDir, '.claude', 'skills'))).toBe(false);
+    expect(
+      fs.existsSync(path.join(homeDir, '.gemini', 'config', 'skills'))
+    ).toBe(false);
+  });
+
+  it('syncs skills to .claude/skills and .gemini/config/skills only when detected', () => {
+    const homeDir = createTempHome();
+    fs.mkdirSync(path.join(homeDir, '.claude'), { recursive: true });
+    fs.mkdirSync(path.join(homeDir, '.gemini', 'antigravity'), {
+      recursive: true
+    });
+    const extraTarget = path.join(homeDir, 'custom-agent', 'skills');
+
+    const detected = detectTargetSkillRoots(homeDir, [extraTarget, extraTarget]);
+    const agentsRoot = path.join(homeDir, '.agents', 'skills');
+    const claudeRoot = path.join(homeDir, '.claude', 'skills');
+    const geminiRoot = path.join(homeDir, '.gemini', 'config', 'skills');
+
+    expect(detected).toEqual([
+      agentsRoot,
+      claudeRoot,
+      geminiRoot,
+      extraTarget
+    ]);
+
+    const result = installBundledSkills({
+      homeDir,
+      extraTargets: [extraTarget]
+    });
+
+    expect(result.installedRoots).toEqual([
+      agentsRoot,
+      claudeRoot,
+      geminiRoot,
+      extraTarget
+    ]);
+
+    for (const root of [agentsRoot, claudeRoot, geminiRoot, extraTarget]) {
+      for (const skill of BUNDLED_SKILLS) {
+        expect(fs.existsSync(path.join(root, skill, 'SKILL.md'))).toBe(true);
+      }
+    }
+  });
+
+  it('backs up existing skills before overwriting them', () => {
+    const homeDir = createTempHome();
+    const agentsRoot = path.join(homeDir, '.agents', 'skills');
+    const existingSetupDir = path.join(agentsRoot, 'kindle-setup');
+    fs.mkdirSync(existingSetupDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(existingSetupDir, 'SKILL.md'),
+      'old-setup-content',
+      'utf-8'
+    );
+    fs.writeFileSync(
+      path.join(existingSetupDir, 'stale-marker.txt'),
+      'legacy',
+      'utf-8'
+    );
+
+    const claudeDir = path.join(homeDir, '.claude');
+    const existingClaudeSkill = path.join(
+      claudeDir,
+      'skills',
+      'send-to-kindle'
+    );
+    fs.mkdirSync(existingClaudeSkill, { recursive: true });
+    fs.writeFileSync(
+      path.join(existingClaudeSkill, 'SKILL.md'),
+      'old-claude-send',
+      'utf-8'
+    );
+
+    const result = installBundledSkills({ homeDir });
+
+    expect(result.backups).toHaveLength(2);
+    const backupRoot = path.join(
+      homeDir,
+      '.agents',
+      'skill-backups',
+      'kindle-for-agents'
+    );
+    for (const backupPath of result.backups) {
+      expect(backupPath.startsWith(backupRoot)).toBe(true);
+      expect(fs.existsSync(backupPath)).toBe(true);
+    }
+
+    const agentsBackup = result.backups.find((entry) =>
+      path.basename(entry).startsWith('agents-kindle-setup-')
+    );
+    const claudeBackup = result.backups.find((entry) =>
+      path.basename(entry).startsWith('claude-send-to-kindle-')
+    );
+    expect(agentsBackup).toBeDefined();
+    expect(claudeBackup).toBeDefined();
+    expect(
+      fs.readFileSync(path.join(agentsBackup!, 'stale-marker.txt'), 'utf-8')
+    ).toBe('legacy');
+    expect(
+      fs.readFileSync(path.join(claudeBackup!, 'SKILL.md'), 'utf-8')
+    ).toBe('old-claude-send');
+
+    expect(
+      fs.existsSync(path.join(existingSetupDir, 'stale-marker.txt'))
+    ).toBe(false);
+    expect(
+      fs.readFileSync(path.join(existingSetupDir, 'SKILL.md'), 'utf-8')
+    ).not.toBe('old-setup-content');
   });
 });

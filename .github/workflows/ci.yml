@@ -10,17 +10,15 @@ permissions:
   contents: read
 
 jobs:
-  windows:
-    name: Windows / Node ${{ matrix.node }}
-    runs-on: windows-latest
+  build-and-test:
+    name: ${{ matrix.os }} / Node ${{ matrix.node }}
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
+        os: [windows-latest, macos-latest]
         node: [22, 24]
-    defaults:
-      run:
-        shell: pwsh
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-node@v6

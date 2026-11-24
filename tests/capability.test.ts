@@ -1,25 +1,68 @@
+import type * as ChildProcess from 'child_process';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+const keychainMock = vi.hoisted(() => ({
+  value: ''
+}));
+
+vi.mock('child_process', async (importOriginal) => {
+  const actual = await importOriginal<typeof ChildProcess>();
+  return {
+    ...actual,
+    spawnSync: ((
+      executable: string,
+      args?: readonly string[],
+      options?: ChildProcess.SpawnSyncOptions
+    ) => {
+      if (process.platform === 'darwin' && executable === 'security') {
+        const op = args?.[0];
+        if (op === '-i') {
+          const inputStr = typeof options?.input === 'string' ? options.input : '';
+          const m = inputStr.match(/(?:^|\s)-w\s+(\S+)/);
+          if (!m) {
+            return { status: 1, stdout: '', stderr: 'missing password' };
+          }
+          keychainMock.value = m[1];
+          return { status: 0, stdout: '', stderr: '' };
+        }
+        if (op === 'find-generic-password') {
+          return keychainMock.value
+            ? { status: 0, stdout: keychainMock.value, stderr: '' }
+            : { status: 44, stdout: '', stderr: 'could not be found' };
+        }
+        if (op === 'delete-generic-password') {
+          keychainMock.value = '';
+          return { status: 0, stdout: '', stderr: '' };
+        }
+      }
+      return actual.spawnSync(executable, args as string[], options ?? {});
+    }) as typeof actual.spawnSync
+  };
+});
+
 import { getCapabilityStatus } from '../src/core/capability';
 import { clearConfig, saveConfig } from '../src/core/config';
 import { clearCredentials, saveCredentials } from '../src/core/credentials';
 
 describe('Kindle capability state', () => {
-  const originalAppData = process.env.APPDATA;
-  let tempAppData = '';
+  const originalConfigDir = process.env.KINDLE_BRIDGE_CONFIG_DIR;
+  let tempConfigDir = '';
 
   beforeEach(() => {
-    tempAppData = fs.mkdtempSync(path.join(os.tmpdir(), 'kindle-capability-'));
-    process.env.APPDATA = tempAppData;
+    tempConfigDir = fs.mkdtempSync(path.join(os.tmpdir(), 'kindle-capability-'));
+    process.env.KINDLE_BRIDGE_CONFIG_DIR = tempConfigDir;
+    keychainMock.value = '';
   });
 
   afterEach(() => {
     clearCredentials();
     clearConfig();
-    process.env.APPDATA = originalAppData;
-    fs.rmSync(tempAppData, { recursive: true, force: true });
+    if (originalConfigDir === undefined) delete process.env.KINDLE_BRIDGE_CONFIG_DIR;
+    else process.env.KINDLE_BRIDGE_CONFIG_DIR = originalConfigDir;
+    fs.rmSync(tempConfigDir, { recursive: true, force: true });
   });
 
   it('starts in needs_setup without state or credentials', () => {

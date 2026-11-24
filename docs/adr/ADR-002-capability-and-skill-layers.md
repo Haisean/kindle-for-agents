@@ -51,7 +51,7 @@ kindle --json capability
 
 ### 4. 部署边界
 
-`scripts/bootstrap.ps1` 一次性完成：
+Windows `scripts/bootstrap.ps1` 与 macOS `scripts/bootstrap.sh` 一次性完成：
 
 1. 安装依赖并构建 CLI；
 2. 将 `kindle` 注册为当前用户可调用命令；

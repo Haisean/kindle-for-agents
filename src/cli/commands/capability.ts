@@ -2,13 +2,19 @@ import { Command } from 'commander';
 import { getCapabilityStatus } from '../../core/capability';
 import { logger } from '../../core/logger';
 
-export function registerCapabilityCommand(program: Command) {
+export function registerCapabilityCommand(program: Command): void {
   program
     .command('capability')
     .description('查看 Kindle 投送能力是否已经完整部署')
-    .action(() => {
-      const globalOpts = program.opts();
-      const isJson = !!globalOpts.json;
+    .option('--json', '以机器可读的 JSON 格式输出结果')
+    .option('--debug', '开启调试模式输出详细脱敏日志')
+    .action((_options: { json?: boolean; debug?: boolean }, cmd: Command) => {
+      const globalOpts = cmd.optsWithGlobals<{ json?: boolean; debug?: boolean }>();
+      const isJson = Boolean(globalOpts.json || program.opts().json);
+      const isDebug = Boolean(globalOpts.debug || program.opts().debug);
+      logger.setJsonMode(isJson);
+      logger.setDebug(isDebug);
+
       const status = getCapabilityStatus();
 
       if (isJson) {

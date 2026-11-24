@@ -10,15 +10,19 @@ import { clearJobs, getJobsDir } from '../../core/tracker';
 import { logger } from '../../core/logger';
 import { ExitCodes, KindleErrorCode, MachineOutput } from '../../types';
 
-export function registerResetCommand(program: Command) {
+export function registerResetCommand(program: Command): void {
   program
     .command('reset')
     .description('清除本机 Kindle for Agents 连接配置、凭据和任务历史')
     .option('--yes', '确认执行清除，适用于用户已在 Agent 对话中明确同意', false)
-    .action(async (options: { yes?: boolean }) => {
-      const globalOpts = program.opts();
-      const isJson = !!globalOpts.json;
-      logger.setDebug(!!globalOpts.debug);
+    .option('--json', '以机器可读的 JSON 格式输出结果')
+    .option('--debug', '开启调试模式输出详细脱敏日志')
+    .action(async (options: { yes?: boolean; json?: boolean; debug?: boolean }, cmd: Command) => {
+      const globalOpts = cmd.optsWithGlobals<{ json?: boolean; debug?: boolean }>();
+      const isJson = Boolean(globalOpts.json || program.opts().json);
+      const isDebug = Boolean(globalOpts.debug || program.opts().debug);
+      logger.setJsonMode(isJson);
+      logger.setDebug(isDebug);
 
       let confirmed = !!options.yes;
       if (!confirmed && !isJson) {

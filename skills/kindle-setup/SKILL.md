@@ -9,7 +9,7 @@ Deploy the capability only after a real Kindle device or Kindle App receives the
 
 ## Start
 
-1. Run `kindle capability --json`.
+1. Run `kindle --json capability`.
 2. If `data.state` is `ready`, report that setup is already complete and route document sending to `$send-to-kindle`.
 3. Otherwise read [the first-run state machine](references/first-run-state-machine.md) completely and follow it without skipping a handoff.
 4. Before the first user pause, actively open `https://mail.qq.com/` in a controllable browser or the system browser. Do not replace this action with instructions asking the user to open the page.
@@ -20,7 +20,7 @@ Treat these results differently:
 
 - `provider_accepted`: the mail provider accepted the test message; setup is not complete.
 - `device_confirmed`: the user found the test book on Kindle.
-- `kindle capability --json` with `data.ready: true`: the capability is deployed.
+- `kindle --json capability` with `data.ready: true`: the capability is deployed.
 
 After the user replies `Kindle已收到`, run:
 

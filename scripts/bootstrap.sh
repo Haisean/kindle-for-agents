@@ -25,21 +25,49 @@ if [[ -e "$legacy_global_package" || -L "$legacy_global_package" ]]; then
 fi
 npm link
 
-mkdir -p "$skill_root" "$backup_root"
+target_labels=("agents")
+target_roots=("$skill_root")
+
+if [[ -d "$user_home/.claude" ]]; then
+  target_labels+=("claude")
+  target_roots+=("$user_home/.claude/skills")
+fi
+
+if [[ -d "$user_home/.gemini/config" || -d "$user_home/.gemini/antigravity" ]]; then
+  target_labels+=("gemini")
+  target_roots+=("$user_home/.gemini/config/skills")
+fi
+
+mkdir -p "$backup_root"
 stamp="$(date '+%Y%m%d-%H%M%S')"
 
-for skill_name in kindle-for-agents kindle-setup send-to-kindle kindle-bridge; do
-  source_path="$repo_root/skills/$skill_name"
-  destination="$skill_root/$skill_name"
+for i in "${!target_roots[@]}"; do
+  target_label="${target_labels[$i]}"
+  target_root="${target_roots[$i]}"
 
-  if [[ -e "$destination" || -L "$destination" ]]; then
-    backup="$backup_root/$skill_name-$stamp"
-    mv "$destination" "$backup"
-    echo "Backed up existing skill: $backup"
-  fi
+  case "$target_root" in
+    "$user_home"/*) ;;
+    *)
+      echo "The skill destination is outside the current user home: $target_root" >&2
+      exit 1
+      ;;
+  esac
 
-  cp -R "$source_path" "$destination"
-  echo "Installed skill: $skill_name"
+  mkdir -p "$target_root"
+
+  for skill_name in kindle-for-agents kindle-setup send-to-kindle kindle-bridge; do
+    source_path="$repo_root/skills/$skill_name"
+    destination="$target_root/$skill_name"
+
+    if [[ -e "$destination" || -L "$destination" ]]; then
+      backup="$backup_root/$target_label-$skill_name-$stamp"
+      mv "$destination" "$backup"
+      echo "Backed up existing skill: $backup"
+    fi
+
+    cp -R "$source_path" "$destination"
+    echo "Installed skill: $skill_name -> $destination"
+  done
 done
 
 echo
