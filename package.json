@@ -1,6 +1,6 @@
 {
   "name": "kindle-for-agents",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "description": "Local-first Kindle content delivery capability for AI agents",
   "main": "dist/cli/index.js",
   "bin": {

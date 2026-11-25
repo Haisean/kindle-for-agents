@@ -28,7 +28,7 @@ body:
     attributes:
       label: Kindle for Agents 版本
       description: 请粘贴 `kindle --version` 的输出，或填写所用提交的 commit SHA。
-      placeholder: 例如：0.2.1
+      placeholder: 例如：0.3.0
     validations:
       required: true
 
