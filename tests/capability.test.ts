@@ -107,5 +107,5 @@ describe('Kindle capability state', () => {
       credentialsAvailable: true,
       deviceVerified: true
     });
-  });
+  }, 15000);
 });

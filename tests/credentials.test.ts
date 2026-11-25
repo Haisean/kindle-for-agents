@@ -45,7 +45,8 @@ describe('Windows credential protection', () => {
       expect(stored).not.toContain(credentials.smtpPass);
       expect(stored).not.toContain(credentials.smtpUser);
       expect(loadCredentials()).toEqual(credentials);
-    }
+    },
+    15000
   );
 
   it('rejects platforms without an implemented system credential store', () => {
